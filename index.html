@@ -10,11 +10,15 @@
 <body>
     <header>Generador de SQL para Validaciones en BigQuery</header>
     <div class="container">
-        <div>
-            <label for="project">Proyecto:</label>
-            <input id="project" type="text" placeholder="Ej: mi-proyecto-gcp">
-        </div>
         <div class="form-grid">
+            <div>
+                <label for="projectSrc">Proyecto Origen:</label>
+                <input id="projectSrc" type="text" placeholder="Ej: mi-proyecto-origen">
+            </div>
+            <div>
+                <label for="projectDst">Proyecto Destino (opcional):</label>
+                <input id="projectDst" type="text" placeholder="Dejar en blanco si es el mismo que origen">
+            </div>
             <div>
                 <label for="datasetSrc">Dataset Origen:</label>
                 <input id="datasetSrc" type="text" placeholder="Ej: mi_dataset_origen">

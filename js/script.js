@@ -9,7 +9,8 @@ function parseFields(text) {
 
 function generateSQL() {
     saveToLocalStorage();
-    const project = document.getElementById('project').value.trim();
+    const projectSrc = document.getElementById('projectSrc').value.trim();
+    const projectDst = document.getElementById('projectDst').value.trim() || projectSrc;
     const datasetSrc = document.getElementById('datasetSrc').value.trim();
     const datasetDst = document.getElementById('datasetDst').value.trim() || datasetSrc;
     const tableSrc = document.getElementById('tableSrc').value.trim();
@@ -21,8 +22,8 @@ function generateSQL() {
     const outputContainer = document.getElementById('output');
     const loader = document.querySelector('.loader');
 
-    if (!project || !datasetSrc || !tableSrc) {
-        showNotification('Por favor, completa los campos requeridos: Proyecto, Dataset Origen y Tabla Origen.', 'error');
+    if (!projectSrc || !datasetSrc || !tableSrc) {
+        showNotification('Por favor, completa los campos requeridos: Proyecto Origen, Dataset Origen y Tabla Origen.', 'error');
         return;
     }
 
@@ -37,18 +38,18 @@ function generateSQL() {
 
         sqls.push({
             title: '1️⃣ Cantidad de registros (Origen)',
-            query: `SELECT '${tableSrc}' AS tabla, COUNT(*) AS registros FROM \`${project}.${datasetSrc}.${tableSrc}\` ${whereSrc};`
+            query: `SELECT '${tableSrc}' AS tabla, COUNT(*) AS registros FROM \`${projectSrc}.${datasetSrc}.${tableSrc}\` ${whereSrc};`
         });
 
         if (tableDst) {
             sqls.push({
                 title: '1️⃣ Cantidad de registros (Destino)',
-                query: `SELECT '${tableDst}' AS tabla, COUNT(*) AS registros FROM \`${project}.${datasetDst}.${tableDst}\` ${whereDst};`
+                query: `SELECT '${tableDst}' AS tabla, COUNT(*) AS registros FROM \`${projectDst}.${datasetDst}.${tableDst}\` ${whereDst};`
             });
 
             sqls.push({
                 title: '2️⃣ Comparación de esquemas (estructura y tipo de dato)',
-                query: `WITH schema_src AS (\n  SELECT column_name, data_type, is_nullable\n  FROM \`${project}.${datasetSrc}.INFORMATION_SCHEMA.COLUMNS\`\n  WHERE table_name = '${tableSrc}'\n), schema_dst AS (\n  SELECT column_name, data_type, is_nullable\n  FROM \`${project}.${datasetDst}.INFORMATION_SCHEMA.COLUMNS\`\n  WHERE table_name = '${tableDst}'\n)\nSELECT\n  COALESCE(src.column_name, dst.column_name) AS columna,\n  src.data_type AS tipo_origen,\n  dst.data_type AS tipo_destino,\n  src.is_nullable AS nullable_origen,\n  dst.is_nullable AS nullable_destino\nFROM schema_src src\nFULL OUTER JOIN schema_dst dst ON src.column_name = dst.column_name\nWHERE src.data_type != dst.data_type OR src.is_nullable != dst.is_nullable OR src.column_name IS NULL OR dst.column_name IS NULL;`
+                query: `WITH schema_src AS (\n  SELECT column_name, data_type, is_nullable\n  FROM \`${projectSrc}.${datasetSrc}.INFORMATION_SCHEMA.COLUMNS\`\n  WHERE table_name = '${tableSrc}'\n), schema_dst AS (\n  SELECT column_name, data_type, is_nullable\n  FROM \`${projectDst}.${datasetDst}.INFORMATION_SCHEMA.COLUMNS\`\n  WHERE table_name = '${tableDst}'\n)\nSELECT\n  COALESCE(src.column_name, dst.column_name) AS columna,\n  src.data_type AS tipo_origen,\n  dst.data_type AS tipo_destino,\n  src.is_nullable AS nullable_origen,\n  dst.is_nullable AS nullable_destino\nFROM schema_src src\nFULL OUTER JOIN schema_dst dst ON src.column_name = dst.column_name\nWHERE src.data_type != dst.data_type OR src.is_nullable != dst.is_nullable OR src.column_name IS NULL OR dst.column_name IS NULL;`
             });
         }
 
@@ -56,12 +57,12 @@ function generateSQL() {
             const keys = keyField.split(',').map(k => k.trim()).join(', ');
             sqls.push({
                 title: '3️⃣ Duplicados en Clave Primaria (Origen)',
-                query: `SELECT ${keys}, COUNT(*) AS num_duplicados\nFROM \`${project}.${datasetSrc}.${tableSrc}\` ${whereSrc}\nGROUP BY ${keys}\nHAVING COUNT(*) > 1;`
+                query: `SELECT ${keys}, COUNT(*) AS num_duplicados\nFROM \`${projectSrc}.${datasetSrc}.${tableSrc}\` ${whereSrc}\nGROUP BY ${keys}\nHAVING COUNT(*) > 1;`
             });
             if (tableDst) {
                 sqls.push({
                     title: '4️⃣ Duplicados en Clave Primaria (Destino)',
-                    query: `SELECT ${keys}, COUNT(*) AS num_duplicados\nFROM \`${project}.${datasetDst}.${tableDst}\` ${whereDst}\nGROUP BY ${keys}\nHAVING COUNT(*) > 1;`
+                    query: `SELECT ${keys}, COUNT(*) AS num_duplicados\nFROM \`${projectDst}.${datasetDst}.${tableDst}\` ${whereDst}\nGROUP BY ${keys}\nHAVING COUNT(*) > 1;`
                 });
             }
         }
@@ -69,16 +70,22 @@ function generateSQL() {
         if (tableDst && keyField && fields.length > 0) {
             const joinCondition = keyField.split(',').map(k => `src.${k.trim()} = dst.${k.trim()}`).join(' AND ');
             const fieldComparisons = fields.map(f => `(SAFE_CAST(src.${f} AS STRING) IS NOT DISTINCT FROM SAFE_CAST(dst.${f} AS STRING))`).join(' AND\n      ');
+
+            const filterConditions = [];
+            if (filterSrc) filterConditions.push(`(${filterSrc})`);
+            if (filterDst) filterConditions.push(`(${filterDst})`);
+            const combinedWhere = filterConditions.length > 0 ? `\nWHERE ${filterConditions.join(' AND ')}` : '';
+
             sqls.push({
                 title: '5️⃣ Validación campo a campo',
-                query: `SELECT\n  '${tableSrc}' AS tabla_origen,\n  '${tableDst}' AS tabla_destino,\n  COUNT(*) AS total_filas,\n  COUNTIF(NOT (${fieldComparisons})) AS filas_con_inconsistencias\nFROM \`${project}.${datasetSrc}.${tableSrc}\` src\nJOIN \`${project}.${datasetDst}.${tableDst}\` dst ON ${joinCondition}\n${whereSrc.replace('WHERE', 'AND')} ${whereDst.replace('WHERE', 'AND')};`
+                query: `SELECT\n  '${tableSrc}' AS tabla_origen,\n  '${tableDst}' AS tabla_destino,\n  COUNT(*) AS total_filas,\n  COUNTIF(NOT (${fieldComparisons})) AS filas_con_inconsistencias\nFROM \`${projectSrc}.${datasetSrc}.${tableSrc}\` src\nJOIN \`${projectDst}.${datasetDst}.${tableDst}\` dst ON ${joinCondition}${combinedWhere};`
             });
         }
 
         if(tableDst){
              sqls.push({
                 title: '6️⃣ Orden de columnas',
-                query: `SELECT src.ordinal_position, src.column_name AS col_origen, dst.column_name AS col_destino\nFROM \`${project}.${datasetSrc}.INFORMATION_SCHEMA.COLUMNS\` src\nJOIN \`${project}.${datasetDst}.INFORMATION_SCHEMA.COLUMNS\` dst\n  ON src.ordinal_position = dst.ordinal_position\nWHERE src.table_name='${tableSrc}' AND dst.table_name='${tableDst}'\n  AND src.column_name != dst.column_name;`
+                query: `SELECT src.ordinal_position, src.column_name AS col_origen, dst.column_name AS col_destino\nFROM \`${projectSrc}.${datasetSrc}.INFORMATION_SCHEMA.COLUMNS\` src\nJOIN \`${projectDst}.${datasetDst}.INFORMATION_SCHEMA.COLUMNS\` dst\n  ON src.ordinal_position = dst.ordinal_position\nWHERE src.table_name='${tableSrc}' AND dst.table_name='${tableDst}'\n  AND src.column_name != dst.column_name;`
             });
         }
 
@@ -110,7 +117,8 @@ function copyToClipboard(elementId) {
 
 function saveToLocalStorage() {
     const data = {
-        project: document.getElementById('project').value,
+        projectSrc: document.getElementById('projectSrc').value,
+        projectDst: document.getElementById('projectDst').value,
         datasetSrc: document.getElementById('datasetSrc').value,
         datasetDst: document.getElementById('datasetDst').value,
         tableSrc: document.getElementById('tableSrc').value,
@@ -126,7 +134,8 @@ function saveToLocalStorage() {
 function loadFromLocalStorage() {
     const data = JSON.parse(localStorage.getItem('sqlGeneratorData'));
     if (data) {
-        document.getElementById('project').value = data.project || '';
+        document.getElementById('projectSrc').value = data.projectSrc || '';
+        document.getElementById('projectDst').value = data.projectDst || '';
         document.getElementById('datasetSrc').value = data.datasetSrc || '';
         document.getElementById('datasetDst').value = data.datasetDst || '';
         document.getElementById('tableSrc').value = data.tableSrc || '';
