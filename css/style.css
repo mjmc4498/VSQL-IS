@@ -1,5 +1,10 @@
 @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
 
+:root {
+  --primary-blue: #0033a0;
+  --secondary-cyan: #00b4f0;
+}
+
 body {
   font-family: 'Roboto', sans-serif;
   background-color: #f7f9fc;
@@ -10,15 +15,28 @@ body {
 }
 
 header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--primary-blue);
   color: white;
-  text-align: center;
-  padding: 1.5rem;
-  font-size: 2rem;
-  font-weight: bold;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 1rem 1.5rem;
   border-radius: 10px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
   margin-bottom: 2rem;
+}
+
+header .logo {
+    font-size: 1.8rem;
+    font-weight: bold;
+    color: var(--secondary-cyan);
+    margin-right: 1.5rem;
+}
+
+header h1 {
+    font-size: 1.5rem;
+    margin: 0;
+    font-weight: 400;
 }
 
 .container {
@@ -55,7 +73,7 @@ input, textarea {
 
 input:focus, textarea:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: var(--secondary-cyan);
 }
 
 button#generateBtn {
@@ -63,7 +81,7 @@ button#generateBtn {
   padding: 0.8rem 1.8rem;
   border: none;
   border-radius: 5px;
-  background: #667eea;
+  background: var(--primary-blue);
   color: white;
   cursor: pointer;
   font-weight: bold;
@@ -75,7 +93,7 @@ button#generateBtn {
 }
 
 button#generateBtn:hover {
-  background: #5a6fd5;
+  background: #00227a;
   transform: translateY(-2px);
 }
 
@@ -97,7 +115,7 @@ button#generateBtn:hover {
     display: block;
     margin-bottom: 1rem;
     font-size: 1.1rem;
-    color: #333;
+    color: var(--primary-blue);
 }
 
 .sql-output pre {
@@ -161,4 +179,18 @@ button#generateBtn:hover {
     opacity: 1;
     visibility: visible;
     transform: translate(-50%, -10px);
+}
+
+@media (max-width: 600px) {
+    header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    header h1 {
+        margin-top: 0.5rem;
+        font-size: 1.2rem;
+    }
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
 }
