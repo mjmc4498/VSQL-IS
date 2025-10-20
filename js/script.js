@@ -4,7 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function parseFields(text) {
-  return text.split(/\n+/).map(line => line.trim()).filter(Boolean);
+  return text.split(',').map(line => line.trim()).filter(Boolean);
 }
 
 function generateSQL() {
