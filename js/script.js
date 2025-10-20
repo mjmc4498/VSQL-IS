@@ -36,33 +36,40 @@ function generateSQL() {
     setTimeout(() => {
         let sqls = [];
 
-        sqls.push({
-            title: '1️⃣ Cantidad de registros (Origen)',
-            query: `SELECT '${tableSrc}' AS tabla, COUNT(*) AS registros FROM \`${projectSrc}.${datasetSrc}.${tableSrc}\` ${whereSrc};`
-        });
-
         if (tableDst) {
             sqls.push({
-                title: '1️⃣ Cantidad de registros (Destino)',
-                query: `SELECT '${tableDst}' AS tabla, COUNT(*) AS registros FROM \`${projectDst}.${datasetDst}.${tableDst}\` ${whereDst};`
+                title: '1️⃣ Comparación de Cantidad de Registros',
+                query: `WITH count_src AS (\n  SELECT COUNT(*) AS total FROM \`${projectSrc}.${datasetSrc}.${tableSrc}\` ${whereSrc}\n), count_dst AS (\n  SELECT COUNT(*) AS total FROM \`${projectDst}.${datasetDst}.${tableDst}\` ${whereDst}\n)\nSELECT\n  (SELECT total FROM count_src) AS \`${tableSrc}\`,\n  (SELECT total FROM count_dst) AS \`${tableDst}\`,\n  IF((SELECT total FROM count_src) = (SELECT total FROM count_dst), 'OK', 'DIFERENCIA') AS resultado;`
             });
 
             sqls.push({
                 title: '2️⃣ Comparación de esquemas (estructura y tipo de dato)',
                 query: `WITH schema_src AS (\n  SELECT column_name, data_type, is_nullable\n  FROM \`${projectSrc}.${datasetSrc}.INFORMATION_SCHEMA.COLUMNS\`\n  WHERE table_name = '${tableSrc}'\n), schema_dst AS (\n  SELECT column_name, data_type, is_nullable\n  FROM \`${projectDst}.${datasetDst}.INFORMATION_SCHEMA.COLUMNS\`\n  WHERE table_name = '${tableDst}'\n)\nSELECT\n  COALESCE(src.column_name, dst.column_name) AS columna,\n  src.data_type AS tipo_origen,\n  dst.data_type AS tipo_destino,\n  src.is_nullable AS nullable_origen,\n  dst.is_nullable AS nullable_destino\nFROM schema_src src\nFULL OUTER JOIN schema_dst dst ON src.column_name = dst.column_name\nWHERE src.data_type != dst.data_type OR src.is_nullable != dst.is_nullable OR src.column_name IS NULL OR dst.column_name IS NULL;`
             });
+
+             sqls.push({
+                title: '6️⃣ Orden de columnas',
+                query: `SELECT src.ordinal_position, src.column_name AS col_origen, dst.column_name AS col_destino\nFROM \`${projectSrc}.${datasetSrc}.INFORMATION_SCHEMA.COLUMNS\` src\nJOIN \`${projectDst}.${datasetDst}.INFORMATION_SCHEMA.COLUMNS\` dst\n  ON src.ordinal_position = dst.ordinal_position\nWHERE src.table_name='${tableSrc}' AND dst.table_name='${tableDst}'\n  AND src.column_name != dst.column_name;`
+            });
+
+        } else {
+             sqls.push({
+                title: '1️⃣ Cantidad de registros',
+                query: `SELECT COUNT(*) AS total_registros FROM \`${projectSrc}.${datasetSrc}.${tableSrc}\` ${whereSrc};`
+            });
         }
 
         if (keyField) {
             const keys = keyField.split(',').map(k => k.trim()).join(', ');
-            sqls.push({
-                title: '3️⃣ Duplicados en Clave Primaria (Origen)',
-                query: `SELECT ${keys}, COUNT(*) AS num_duplicados\nFROM \`${projectSrc}.${datasetSrc}.${tableSrc}\` ${whereSrc}\nGROUP BY ${keys}\nHAVING COUNT(*) > 1;`
-            });
             if (tableDst) {
+                 sqls.push({
+                    title: '3️⃣ Duplicados en Clave Primaria',
+                    query: `WITH duplicates_src AS (\n  SELECT COUNT(*) AS total FROM (\n    SELECT ${keys}\n    FROM \`${projectSrc}.${datasetSrc}.${tableSrc}\` ${whereSrc}\n    GROUP BY ${keys}\n    HAVING COUNT(*) > 1\n  )\n), duplicates_dst AS (\n  SELECT COUNT(*) AS total FROM (\n    SELECT ${keys}\n    FROM \`${projectDst}.${datasetDst}.${tableDst}\` ${whereDst}\n    GROUP BY ${keys}\n    HAVING COUNT(*) > 1\n  )\n)\nSELECT\n  (SELECT total FROM duplicates_src) AS duplicados_${tableSrc},\n  (SELECT total FROM duplicates_dst) AS duplicados_${tableDst};`
+                });
+            } else {
                 sqls.push({
-                    title: '4️⃣ Duplicados en Clave Primaria (Destino)',
-                    query: `SELECT ${keys}, COUNT(*) AS num_duplicados\nFROM \`${projectDst}.${datasetDst}.${tableDst}\` ${whereDst}\nGROUP BY ${keys}\nHAVING COUNT(*) > 1;`
+                    title: '2️⃣ Duplicados en Clave Primaria',
+                    query: `SELECT ${keys}, COUNT(*) AS num_duplicados\nFROM \`${projectSrc}.${datasetSrc}.${tableSrc}\` ${whereSrc}\nGROUP BY ${keys}\nHAVING COUNT(*) > 1;`
                 });
             }
         }
@@ -71,21 +78,12 @@ function generateSQL() {
             const joinCondition = keyField.split(',').map(k => `src.${k.trim()} = dst.${k.trim()}`).join(' AND ');
             const fieldComparisons = fields.map(f => `(SAFE_CAST(src.${f} AS STRING) IS NOT DISTINCT FROM SAFE_CAST(dst.${f} AS STRING))`).join(' AND\n      ');
 
-            const filterConditions = [];
-            if (filterSrc) filterConditions.push(`(${filterSrc})`);
-            if (filterDst) filterConditions.push(`(${filterDst})`);
-            const combinedWhere = filterConditions.length > 0 ? `\nWHERE ${filterConditions.join(' AND ')}` : '';
+            const sourceQuery = `(\n    SELECT *\n    FROM \`${projectSrc}.${datasetSrc}.${tableSrc}\`\n    ${whereSrc}\n  )`;
+            const destQuery = `(\n    SELECT *\n    FROM \`${projectDst}.${datasetDst}.${tableDst}\`\n    ${whereDst}\n  )`;
 
             sqls.push({
-                title: '5️⃣ Validación campo a campo',
-                query: `SELECT\n  '${tableSrc}' AS tabla_origen,\n  '${tableDst}' AS tabla_destino,\n  COUNT(*) AS total_filas,\n  COUNTIF(NOT (${fieldComparisons})) AS filas_con_inconsistencias\nFROM \`${projectSrc}.${datasetSrc}.${tableSrc}\` src\nJOIN \`${projectDst}.${datasetDst}.${tableDst}\` dst ON ${joinCondition}${combinedWhere};`
-            });
-        }
-
-        if(tableDst){
-             sqls.push({
-                title: '6️⃣ Orden de columnas',
-                query: `SELECT src.ordinal_position, src.column_name AS col_origen, dst.column_name AS col_destino\nFROM \`${projectSrc}.${datasetSrc}.INFORMATION_SCHEMA.COLUMNS\` src\nJOIN \`${projectDst}.${datasetDst}.INFORMATION_SCHEMA.COLUMNS\` dst\n  ON src.ordinal_position = dst.ordinal_position\nWHERE src.table_name='${tableSrc}' AND dst.table_name='${tableDst}'\n  AND src.column_name != dst.column_name;`
+                title: '4️⃣ Validación campo a campo',
+                query: `SELECT\n  '${tableSrc}' AS tabla_origen,\n  '${tableDst}' AS tabla_destino,\n  COUNT(*) AS total_filas,\n  COUNTIF(NOT (${fieldComparisons})) AS filas_con_inconsistencias\nFROM ${sourceQuery} src\nJOIN ${destQuery} dst ON ${joinCondition};`
             });
         }
 
