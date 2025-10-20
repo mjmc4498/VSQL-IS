@@ -10,64 +10,77 @@ function parseFields(text) {
 function generateSQL() {
     saveToLocalStorage();
     const project = document.getElementById('project').value.trim();
-    const dataset = document.getElementById('dataset').value.trim();
+    const datasetSrc = document.getElementById('datasetSrc').value.trim();
+    const datasetDst = document.getElementById('datasetDst').value.trim() || datasetSrc;
     const tableSrc = document.getElementById('tableSrc').value.trim();
     const tableDst = document.getElementById('tableDst').value.trim();
+    const filterSrc = document.getElementById('filterSrc').value.trim();
+    const filterDst = document.getElementById('filterDst').value.trim();
     const fields = parseFields(document.getElementById('fields').value);
     const keyField = document.getElementById('keyField').value.trim();
     const outputContainer = document.getElementById('output');
     const loader = document.querySelector('.loader');
 
-    if (!project || !dataset || !tableSrc || !tableDst) {
-        showNotification('Por favor, completa todos los campos requeridos.', 'error');
-        return;
-    }
-
-    if (!keyField) {
-        showNotification('Por favor, define una clave primaria para continuar.', 'error');
+    if (!project || !datasetSrc || !tableSrc) {
+        showNotification('Por favor, completa los campos requeridos: Proyecto, Dataset Origen y Tabla Origen.', 'error');
         return;
     }
 
     loader.style.display = 'inline-block';
     outputContainer.innerHTML = '';
 
+    const whereSrc = filterSrc ? `WHERE ${filterSrc}` : '';
+    const whereDst = filterDst ? `WHERE ${filterDst}` : '';
+
     setTimeout(() => {
         let sqls = [];
 
         sqls.push({
-            title: '1️⃣ Cantidad de registros por tabla',
-            query: `SELECT '${tableSrc}' AS tabla, COUNT(*) AS registros FROM \`${project}.${dataset}.${tableSrc}\`\nUNION ALL\nSELECT '${tableDst}' AS tabla, COUNT(*) AS registros FROM \`${project}.${dataset}.${tableDst}\`;`
+            title: '1️⃣ Cantidad de registros (Origen)',
+            query: `SELECT '${tableSrc}' AS tabla, COUNT(*) AS registros FROM \`${project}.${datasetSrc}.${tableSrc}\` ${whereSrc};`
         });
 
-        sqls.push({
-            title: '2️⃣ Comparación de esquemas (nombre, tipo y modo)',
-            query: `WITH schema_src AS (\n  SELECT column_name, data_type, is_nullable\n  FROM \`${project}.${dataset}.INFORMATION_SCHEMA.COLUMNS\`\n  WHERE table_name = '${tableSrc}'\n), schema_dst AS (\n  SELECT column_name, data_type, is_nullable\n  FROM \`${project}.${dataset}.INFORMATION_SCHEMA.COLUMNS\`\n  WHERE table_name = '${tableDst}'\n)\nSELECT\n  COALESCE(src.column_name, dst.column_name) AS columna,\n  src.data_type AS tipo_origen,\n  dst.data_type AS tipo_destino,\n  src.is_nullable AS nullable_origen,\n  dst.is_nullable AS nullable_destino\nFROM schema_src src\nFULL OUTER JOIN schema_dst dst ON src.column_name = dst.column_name\nWHERE src.data_type != dst.data_type OR src.is_nullable != dst.is_nullable OR src.column_name IS NULL OR dst.column_name IS NULL;`
-        });
-
-        const keys = keyField.split(',').map(k => k.trim()).join(', ');
-        sqls.push({
-            title: '3️⃣ Duplicados en Clave Primaria (Origen)',
-            query: `SELECT ${keys}, COUNT(*) AS num_duplicados\nFROM \`${project}.${dataset}.${tableSrc}\`\nGROUP BY ${keys}\nHAVING COUNT(*) > 1;`
-        });
-        sqls.push({
-            title: '4️⃣ Duplicados en Clave Primaria (Destino)',
-            query: `SELECT ${keys}, COUNT(*) AS num_duplicados\nFROM \`${project}.${dataset}.${tableDst}\`\nGROUP BY ${keys}\nHAVING COUNT(*) > 1;`
-        });
-
-        const joinCondition = keyField.split(',').map(k => `src.${k.trim()} = dst.${k.trim()}`).join(' AND ');
-        const fieldComparisons = fields.map(f => `(SAFE_CAST(src.${f} AS STRING) IS NOT DISTINCT FROM SAFE_CAST(dst.${f} AS STRING))`).join(' AND\n      ');
-
-        if (fields.length > 0) {
+        if (tableDst) {
             sqls.push({
-                title: '5️⃣ Validación campo a campo',
-                query: `SELECT\n  '${tableSrc}' AS tabla_origen,\n  '${tableDst}' AS tabla_destino,\n  COUNT(*) AS total_filas,\n  COUNTIF(NOT (${fieldComparisons})) AS filas_con_inconsistencias\nFROM \`${project}.${dataset}.${tableSrc}\` src\nJOIN \`${project}.${dataset}.${tableDst}\` dst ON ${joinCondition};`
+                title: '1️⃣ Cantidad de registros (Destino)',
+                query: `SELECT '${tableDst}' AS tabla, COUNT(*) AS registros FROM \`${project}.${datasetDst}.${tableDst}\` ${whereDst};`
+            });
+
+            sqls.push({
+                title: '2️⃣ Comparación de esquemas (estructura y tipo de dato)',
+                query: `WITH schema_src AS (\n  SELECT column_name, data_type, is_nullable\n  FROM \`${project}.${datasetSrc}.INFORMATION_SCHEMA.COLUMNS\`\n  WHERE table_name = '${tableSrc}'\n), schema_dst AS (\n  SELECT column_name, data_type, is_nullable\n  FROM \`${project}.${datasetDst}.INFORMATION_SCHEMA.COLUMNS\`\n  WHERE table_name = '${tableDst}'\n)\nSELECT\n  COALESCE(src.column_name, dst.column_name) AS columna,\n  src.data_type AS tipo_origen,\n  dst.data_type AS tipo_destino,\n  src.is_nullable AS nullable_origen,\n  dst.is_nullable AS nullable_destino\nFROM schema_src src\nFULL OUTER JOIN schema_dst dst ON src.column_name = dst.column_name\nWHERE src.data_type != dst.data_type OR src.is_nullable != dst.is_nullable OR src.column_name IS NULL OR dst.column_name IS NULL;`
             });
         }
 
-        sqls.push({
-            title: '6️⃣ Orden de columnas',
-            query: `SELECT src.ordinal_position, src.column_name AS col_origen, dst.column_name AS col_destino\nFROM \`${project}.${dataset}.INFORMATION_SCHEMA.COLUMNS\` src\nJOIN \`${project}.${dataset}.INFORMATION_SCHEMA.COLUMNS\` dst\n  ON src.ordinal_position = dst.ordinal_position\nWHERE src.table_name='${tableSrc}' AND dst.table_name='${tableDst}'\n  AND src.column_name != dst.column_name;`
-        });
+        if (keyField) {
+            const keys = keyField.split(',').map(k => k.trim()).join(', ');
+            sqls.push({
+                title: '3️⃣ Duplicados en Clave Primaria (Origen)',
+                query: `SELECT ${keys}, COUNT(*) AS num_duplicados\nFROM \`${project}.${datasetSrc}.${tableSrc}\` ${whereSrc}\nGROUP BY ${keys}\nHAVING COUNT(*) > 1;`
+            });
+            if (tableDst) {
+                sqls.push({
+                    title: '4️⃣ Duplicados en Clave Primaria (Destino)',
+                    query: `SELECT ${keys}, COUNT(*) AS num_duplicados\nFROM \`${project}.${datasetDst}.${tableDst}\` ${whereDst}\nGROUP BY ${keys}\nHAVING COUNT(*) > 1;`
+                });
+            }
+        }
+
+        if (tableDst && keyField && fields.length > 0) {
+            const joinCondition = keyField.split(',').map(k => `src.${k.trim()} = dst.${k.trim()}`).join(' AND ');
+            const fieldComparisons = fields.map(f => `(SAFE_CAST(src.${f} AS STRING) IS NOT DISTINCT FROM SAFE_CAST(dst.${f} AS STRING))`).join(' AND\n      ');
+            sqls.push({
+                title: '5️⃣ Validación campo a campo',
+                query: `SELECT\n  '${tableSrc}' AS tabla_origen,\n  '${tableDst}' AS tabla_destino,\n  COUNT(*) AS total_filas,\n  COUNTIF(NOT (${fieldComparisons})) AS filas_con_inconsistencias\nFROM \`${project}.${datasetSrc}.${tableSrc}\` src\nJOIN \`${project}.${datasetDst}.${tableDst}\` dst ON ${joinCondition}\n${whereSrc.replace('WHERE', 'AND')} ${whereDst.replace('WHERE', 'AND')};`
+            });
+        }
+
+        if(tableDst){
+             sqls.push({
+                title: '6️⃣ Orden de columnas',
+                query: `SELECT src.ordinal_position, src.column_name AS col_origen, dst.column_name AS col_destino\nFROM \`${project}.${datasetSrc}.INFORMATION_SCHEMA.COLUMNS\` src\nJOIN \`${project}.${datasetDst}.INFORMATION_SCHEMA.COLUMNS\` dst\n  ON src.ordinal_position = dst.ordinal_position\nWHERE src.table_name='${tableSrc}' AND dst.table_name='${tableDst}'\n  AND src.column_name != dst.column_name;`
+            });
+        }
 
         renderSQLs(sqls);
         loader.style.display = 'none';
@@ -98,9 +111,12 @@ function copyToClipboard(elementId) {
 function saveToLocalStorage() {
     const data = {
         project: document.getElementById('project').value,
-        dataset: document.getElementById('dataset').value,
+        datasetSrc: document.getElementById('datasetSrc').value,
+        datasetDst: document.getElementById('datasetDst').value,
         tableSrc: document.getElementById('tableSrc').value,
         tableDst: document.getElementById('tableDst').value,
+        filterSrc: document.getElementById('filterSrc').value,
+        filterDst: document.getElementById('filterDst').value,
         fields: document.getElementById('fields').value,
         keyField: document.getElementById('keyField').value
     };
@@ -111,9 +127,12 @@ function loadFromLocalStorage() {
     const data = JSON.parse(localStorage.getItem('sqlGeneratorData'));
     if (data) {
         document.getElementById('project').value = data.project || '';
-        document.getElementById('dataset').value = data.dataset || '';
+        document.getElementById('datasetSrc').value = data.datasetSrc || '';
+        document.getElementById('datasetDst').value = data.datasetDst || '';
         document.getElementById('tableSrc').value = data.tableSrc || '';
         document.getElementById('tableDst').value = data.tableDst || '';
+        document.getElementById('filterSrc').value = data.filterSrc || '';
+        document.getElementById('filterDst').value = data.filterDst || '';
         document.getElementById('fields').value = data.fields || '';
         document.getElementById('keyField').value = data.keyField || '';
     }

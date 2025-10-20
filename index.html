@@ -10,22 +10,34 @@
 <body>
     <header>Generador de SQL para Validaciones en BigQuery</header>
     <div class="container">
+        <div>
+            <label for="project">Proyecto:</label>
+            <input id="project" type="text" placeholder="Ej: mi-proyecto-gcp">
+        </div>
         <div class="form-grid">
             <div>
-                <label for="project">Proyecto:</label>
-                <input id="project" type="text" placeholder="Ej: mi-proyecto-gcp">
+                <label for="datasetSrc">Dataset Origen:</label>
+                <input id="datasetSrc" type="text" placeholder="Ej: mi_dataset_origen">
             </div>
             <div>
-                <label for="dataset">Dataset:</label>
-                <input id="dataset" type="text" placeholder="Ej: mi_dataset">
+                <label for="datasetDst">Dataset Destino (opcional):</label>
+                <input id="datasetDst" type="text" placeholder="Dejar en blanco si es el mismo que origen">
             </div>
             <div>
                 <label for="tableSrc">Tabla Origen:</label>
                 <input id="tableSrc" type="text" placeholder="Ej: tabla_origen">
             </div>
             <div>
-                <label for="tableDst">Tabla Destino:</label>
-                <input id="tableDst" type="text" placeholder="Ej: tabla_destino">
+                <label for="tableDst">Tabla Destino (opcional):</label>
+                <input id="tableDst" type="text" placeholder="Dejar en blanco para validar una sola tabla">
+            </div>
+             <div>
+                <label for="filterSrc">Filtro Tabla Origen (opcional):</label>
+                <input id="filterSrc" type="text" placeholder="Ej: fecha > '2023-01-01'">
+            </div>
+            <div>
+                <label for="filterDst">Filtro Tabla Destino (opcional):</label>
+                <input id="filterDst" type="text" placeholder="Ej: estado = 'activo'">
             </div>
         </div>
 
