@@ -29,18 +29,10 @@
             </div>
         </div>
 
-        <div class="fields-grid">
-            <div>
-                <label for="fieldsSrc">Campos y Tipos (Origen):</label>
-                <textarea id="fieldsSrc" rows="6" placeholder="campo1,STRING\ncampo2,INT64"></textarea>
-            </div>
-            <div>
-                <label for="fieldsDst">Campos y Tipos (Destino):</label>
-                <textarea id="fieldsDst" rows="6" placeholder="campo1,STRING\ncampo2,INT64"></textarea>
-            </div>
-        </div>
+        <label for="fields">Campos a Comparar (uno por línea):</label>
+        <textarea id="fields" rows="6" placeholder="campo1\ncampo2\ncampo3"></textarea>
 
-        <label for="keyField">Clave Primaria (opcional, separada por comas):</label>
+        <label for="keyField">Clave Primaria (separada por comas):</label>
         <input id="keyField" type="text" placeholder="Ej: id, another_id">
 
         <button id="generateBtn">

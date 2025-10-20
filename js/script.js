@@ -4,10 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function parseFields(text) {
-  return text.split(/\n+/).map(line => {
-    const [name, type] = line.split(',').map(s => s?.trim() || '');
-    return { name, type };
-  }).filter(f => f.name && f.type);
+  return text.split(/\n+/).map(line => line.trim()).filter(Boolean);
 }
 
 function generateSQL() {
@@ -16,13 +13,18 @@ function generateSQL() {
     const dataset = document.getElementById('dataset').value.trim();
     const tableSrc = document.getElementById('tableSrc').value.trim();
     const tableDst = document.getElementById('tableDst').value.trim();
-    const fieldsSrc = parseFields(document.getElementById('fieldsSrc').value);
+    const fields = parseFields(document.getElementById('fields').value);
     const keyField = document.getElementById('keyField').value.trim();
     const outputContainer = document.getElementById('output');
     const loader = document.querySelector('.loader');
 
     if (!project || !dataset || !tableSrc || !tableDst) {
         showNotification('Por favor, completa todos los campos requeridos.', 'error');
+        return;
+    }
+
+    if (!keyField) {
+        showNotification('Por favor, define una clave primaria para continuar.', 'error');
         return;
     }
 
@@ -42,26 +44,23 @@ function generateSQL() {
             query: `WITH schema_src AS (\n  SELECT column_name, data_type, is_nullable\n  FROM \`${project}.${dataset}.INFORMATION_SCHEMA.COLUMNS\`\n  WHERE table_name = '${tableSrc}'\n), schema_dst AS (\n  SELECT column_name, data_type, is_nullable\n  FROM \`${project}.${dataset}.INFORMATION_SCHEMA.COLUMNS\`\n  WHERE table_name = '${tableDst}'\n)\nSELECT\n  COALESCE(src.column_name, dst.column_name) AS columna,\n  src.data_type AS tipo_origen,\n  dst.data_type AS tipo_destino,\n  src.is_nullable AS nullable_origen,\n  dst.is_nullable AS nullable_destino\nFROM schema_src src\nFULL OUTER JOIN schema_dst dst ON src.column_name = dst.column_name\nWHERE src.data_type != dst.data_type OR src.is_nullable != dst.is_nullable OR src.column_name IS NULL OR dst.column_name IS NULL;`
         });
 
-        if (keyField) {
-            const keys = keyField.split(',').map(k => k.trim()).join(', ');
-            sqls.push({
-                title: '3️⃣ Duplicados en Clave Primaria (Origen)',
-                query: `SELECT ${keys}, COUNT(*) AS num_duplicados\nFROM \`${project}.${dataset}.${tableSrc}\`\nGROUP BY ${keys}\nHAVING COUNT(*) > 1;`
-            });
-            sqls.push({
-                title: '4️⃣ Duplicados en Clave Primaria (Destino)',
-                query: `SELECT ${keys}, COUNT(*) AS num_duplicados\nFROM \`${project}.${dataset}.${tableDst}\`\nGROUP BY ${keys}\nHAVING COUNT(*) > 1;`
-            });
-            const joinCondition = keyField.split(',').map(k => `src.${k.trim()} = dst.${k.trim()}`).join(' AND ');
-            const fieldComparisons = fieldsSrc.map(f => `(SAFE_CAST(src.${f.name} AS STRING) IS NOT DISTINCT FROM SAFE_CAST(dst.${f.name} AS STRING))`).join(' AND\n      ');
+        const keys = keyField.split(',').map(k => k.trim()).join(', ');
+        sqls.push({
+            title: '3️⃣ Duplicados en Clave Primaria (Origen)',
+            query: `SELECT ${keys}, COUNT(*) AS num_duplicados\nFROM \`${project}.${dataset}.${tableSrc}\`\nGROUP BY ${keys}\nHAVING COUNT(*) > 1;`
+        });
+        sqls.push({
+            title: '4️⃣ Duplicados en Clave Primaria (Destino)',
+            query: `SELECT ${keys}, COUNT(*) AS num_duplicados\nFROM \`${project}.${dataset}.${tableDst}\`\nGROUP BY ${keys}\nHAVING COUNT(*) > 1;`
+        });
+
+        const joinCondition = keyField.split(',').map(k => `src.${k.trim()} = dst.${k.trim()}`).join(' AND ');
+        const fieldComparisons = fields.map(f => `(SAFE_CAST(src.${f} AS STRING) IS NOT DISTINCT FROM SAFE_CAST(dst.${f} AS STRING))`).join(' AND\n      ');
+
+        if (fields.length > 0) {
             sqls.push({
                 title: '5️⃣ Validación campo a campo',
                 query: `SELECT\n  '${tableSrc}' AS tabla_origen,\n  '${tableDst}' AS tabla_destino,\n  COUNT(*) AS total_filas,\n  COUNTIF(NOT (${fieldComparisons})) AS filas_con_inconsistencias\nFROM \`${project}.${dataset}.${tableSrc}\` src\nJOIN \`${project}.${dataset}.${tableDst}\` dst ON ${joinCondition};`
-            });
-        } else {
-            sqls.push({
-                title: '3️⃣ Validación campo a campo (sin clave definida)',
-                query: `-- Debes definir una clave primaria para validar duplicados y realizar la validación campo a campo.`
             });
         }
 
@@ -102,8 +101,7 @@ function saveToLocalStorage() {
         dataset: document.getElementById('dataset').value,
         tableSrc: document.getElementById('tableSrc').value,
         tableDst: document.getElementById('tableDst').value,
-        fieldsSrc: document.getElementById('fieldsSrc').value,
-        fieldsDst: document.getElementById('fieldsDst').value,
+        fields: document.getElementById('fields').value,
         keyField: document.getElementById('keyField').value
     };
     localStorage.setItem('sqlGeneratorData', JSON.stringify(data));
@@ -116,8 +114,7 @@ function loadFromLocalStorage() {
         document.getElementById('dataset').value = data.dataset || '';
         document.getElementById('tableSrc').value = data.tableSrc || '';
         document.getElementById('tableDst').value = data.tableDst || '';
-        document.getElementById('fieldsSrc').value = data.fieldsSrc || '';
-        document.getElementById('fieldsDst').value = data.fieldsDst || '';
+        document.getElementById('fields').value = data.fields || '';
         document.getElementById('keyField').value = data.keyField || '';
     }
 }
