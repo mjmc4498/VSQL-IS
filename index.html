@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generador SQL para BigQuery</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+    <header>Generador de SQL para Validaciones en BigQuery</header>
+    <div class="container">
+        <div class="form-grid">
+            <div>
+                <label for="project">Proyecto:</label>
+                <input id="project" type="text" placeholder="Ej: mi-proyecto-gcp">
+            </div>
+            <div>
+                <label for="dataset">Dataset:</label>
+                <input id="dataset" type="text" placeholder="Ej: mi_dataset">
+            </div>
+            <div>
+                <label for="tableSrc">Tabla Origen:</label>
+                <input id="tableSrc" type="text" placeholder="Ej: tabla_origen">
+            </div>
+            <div>
+                <label for="tableDst">Tabla Destino:</label>
+                <input id="tableDst" type="text" placeholder="Ej: tabla_destino">
+            </div>
+        </div>
+
+        <div class="fields-grid">
+            <div>
+                <label for="fieldsSrc">Campos y Tipos (Origen):</label>
+                <textarea id="fieldsSrc" rows="6" placeholder="campo1,STRING\ncampo2,INT64"></textarea>
+            </div>
+            <div>
+                <label for="fieldsDst">Campos y Tipos (Destino):</label>
+                <textarea id="fieldsDst" rows="6" placeholder="campo1,STRING\ncampo2,INT64"></textarea>
+            </div>
+        </div>
+
+        <label for="keyField">Clave Primaria (opcional, separada por comas):</label>
+        <input id="keyField" type="text" placeholder="Ej: id, another_id">
+
+        <button id="generateBtn">
+            <i class="fas fa-cogs"></i>
+            Generar SQLs
+            <div class="loader"></div>
+        </button>
+
+        <div id="output" class="sql-output-container"></div>
+    </div>
+
+    <div id="notification" class="notification"></div>
+
+    <script src="js/script.js"></script>
+</body>
+</html>
